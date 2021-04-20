@@ -1,0 +1,91 @@
+#!/bin/bash
+
+SCRIPT=`realpath -s $0`
+SCRIPTPATH=`dirname $SCRIPT`
+file_db="$SCRIPTPATH/.git-email.db"
+action=$1
+
+declare -A emails
+
+create_bd() {
+	if [ ! -f $file_db ]
+	then
+		touch $file_db
+	fi
+}
+
+show_db() {
+	for i in "${!emails[@]}" 
+	do
+		echo "$i=${emails[$i]}"
+	done
+}
+
+save_db() {
+	rm $file_db
+	for i in "${!emails[@]}" 
+	do
+		echo "$i=${emails[$i]}" >> $file_db
+	done
+}
+
+load_db() {
+	while read line; do
+		IFS='='
+		read -a split_line <<< "$line"
+		emails[${split_line[0]}]=${split_line[1]}
+	done < $file_db
+}
+
+show_current_email()
+{
+	echo "git current email '`git config --global user.email`'"
+}
+
+create_bd
+load_db
+
+if [ ! -n "$action" ]; then
+	echo "git-email: helper is building"
+elif [ "$action" = "i" ]; then
+	show_db
+	show_current_email
+elif [ "$action" = "a" ]; then
+	acronym=$2
+	email=$3
+	if [ -n "$acronym" ]; then
+		if [ -n "$email" ]; then
+			emails[$acronym]=$email
+			save_db
+			echo "email $email with acronym $acronym was registered."
+		else
+			echo "git-email: 'email' is required."
+		fi
+	else
+		echo "git-email: 'acronym' is required."
+	fi
+elif [ "$action" = "c" ]; then
+	acronym=$2
+	echo "$acronym"
+	if [ ! -n "$acronym" ]; then
+		echo "git-email: 'acronym' is required."
+	elif [ -n "${emails["$acronym"]}" ]; then
+		git config --global user.email ${emails["$acronym"]}
+		show_current_email
+	else
+		echo "git-email: '$acronym' is not found."
+	fi
+elif [ "$action" = "r" ]; then
+	acronym=$2
+	if [ ! -n "$acronym" ]; then
+		echo "git-email: 'acronym' is required."
+	elif [ -n "${emails["$acronym"]}" ]; then
+		echo "email ${emails["$acronym"]} was deleted."
+		unset emails[$acronym]
+		save_db
+	else
+		echo "git-email: '$acronym' is not found."
+	fi
+else
+	echo "git-email: '$action' is not a git-email command."
+fi
